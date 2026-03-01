@@ -2,7 +2,7 @@ name: Check hibrain.net Job Postings
 
 on:
   schedule:
-    - cron: "0 0,6,12,18 * * *" # 매 6시간 (UTC)
+    - cron: "0 * * * *" # 매 1시간
   workflow_dispatch: # 수동 실행 가능
 
 jobs:
