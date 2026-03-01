@@ -35,7 +35,8 @@ def fetch_page() -> str:
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
-        page.goto(LIST_URL, wait_until="domcontentloaded", timeout=30000)
+        page.goto(LIST_URL, timeout=30000)
+        page.wait_for_selector("#articleList li.row", timeout=15000)
         html = page.content()
         browser.close()
     return html
