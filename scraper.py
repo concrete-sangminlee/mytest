@@ -5,9 +5,9 @@ import sys
 from html import unescape
 from pathlib import Path
 
-import cloudscraper
 import requests
 from bs4 import BeautifulSoup
+from curl_cffi import requests as curl_requests
 
 BASE_URL = "https://hibrain.net"
 LIST_URL = f"{BASE_URL}/recruitment/recruits?listType=D3NEW&pagesize=50&sortType=SORTDTM"
@@ -34,8 +34,7 @@ def extract_job_id(href: str) -> str:
 
 
 def fetch_page() -> str:
-    scraper = cloudscraper.create_scraper(browser={"browser": "chrome", "platform": "linux"})
-    resp = scraper.get(LIST_URL, timeout=30)
+    resp = curl_requests.get(LIST_URL, impersonate="chrome", timeout=30)
     resp.raise_for_status()
     return resp.text
 
