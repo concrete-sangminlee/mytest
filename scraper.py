@@ -2,6 +2,7 @@ import json
 import os
 import re
 import sys
+import time
 from html import unescape
 from pathlib import Path
 
@@ -33,10 +34,18 @@ def extract_job_id(href: str) -> str:
     return match.group(1) if match else ""
 
 
-def fetch_page() -> str:
-    resp = curl_requests.get(LIST_URL, impersonate="chrome", timeout=30)
+def fetch_page(max_retries: int = 3) -> str:
+    for attempt in range(max_retries):
+        resp = curl_requests.get(LIST_URL, impersonate="chrome", timeout=30)
+        if resp.status_code == 200:
+            return resp.text
+        print(f"시도 {attempt + 1}/{max_retries} 실패 (HTTP {resp.status_code})")
+        if attempt < max_retries - 1:
+            wait = 10 * (attempt + 1)
+            print(f"{wait}초 후 재시도...")
+            time.sleep(wait)
     resp.raise_for_status()
-    return resp.text
+    return ""
 
 
 def scrape_jobs() -> list[dict]:
