@@ -83,7 +83,11 @@ def fetch_page() -> str:
 
 
 def scrape_jobs() -> list[dict]:
-    text = fetch_page()
+    try:
+        text = fetch_page()
+    except RuntimeError as e:
+        print(f"페이지 가져오기 실패: {e}")
+        return []
 
     soup = BeautifulSoup(text, "html.parser")
     article_list = soup.find("ul", id="articleList")
@@ -183,8 +187,8 @@ def main():
     print(f"총 {len(jobs)}개 공고 발견")
 
     if not jobs:
-        print("공고를 가져오지 못했습니다.")
-        sys.exit(1)
+        print("공고를 가져오지 못했습니다. (CloudFront 차단 가능성 - 다음 주기에 재시도)")
+        sys.exit(0)
 
     if test_mode:
         sample = jobs[:3]
