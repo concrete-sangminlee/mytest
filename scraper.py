@@ -2,13 +2,12 @@ import json
 import os
 import re
 import sys
-import time
 from html import unescape
 from pathlib import Path
 
 import requests
 from bs4 import BeautifulSoup
-from curl_cffi import requests as curl_requests
+from playwright.sync_api import sync_playwright
 
 BASE_URL = "https://hibrain.net"
 LIST_URL = f"{BASE_URL}/recruitment/recruits?listType=D3NEW&pagesize=50&sortType=SORTDTM"
@@ -23,34 +22,27 @@ def load_seen() -> list[str]:
 
 
 def save_seen(seen: list[str]) -> None:
-    # 최근 MAX_SEEN개만 유지
     seen = seen[-MAX_SEEN:]
     SEEN_FILE.write_text(json.dumps(seen, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def extract_job_id(href: str) -> str:
-    """URL에서 공고 ID 추출: /recruitment/recruits/3563236?... -> 3563236"""
     match = re.search(r"/recruits/(\d+)", href)
     return match.group(1) if match else ""
 
 
-def fetch_page(max_retries: int = 3) -> str:
-    for attempt in range(max_retries):
-        resp = curl_requests.get(LIST_URL, impersonate="chrome", timeout=30)
-        if resp.status_code == 200:
-            return resp.text
-        print(f"시도 {attempt + 1}/{max_retries} 실패 (HTTP {resp.status_code})")
-        if attempt < max_retries - 1:
-            wait = 10 * (attempt + 1)
-            print(f"{wait}초 후 재시도...")
-            time.sleep(wait)
-    resp.raise_for_status()
-    return ""
+def fetch_page() -> str:
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(LIST_URL, wait_until="domcontentloaded", timeout=30000)
+        html = page.content()
+        browser.close()
+    return html
 
 
 def scrape_jobs() -> list[dict]:
     text = fetch_page()
-
 
     soup = BeautifulSoup(text, "html.parser")
     article_list = soup.find("ul", id="articleList")
@@ -71,7 +63,6 @@ def scrape_jobs() -> list[dict]:
 
         title = link_tag.get("title", "").strip() or link_tag.get_text(strip=True)
 
-        # 접수기간 추출
         receipt_span = li.find("span", class_="td_receipt")
         period = ""
         if receipt_span:
@@ -102,7 +93,7 @@ def build_slack_message(new_jobs: list[dict]) -> dict:
         {"type": "divider"},
     ]
 
-    for job in new_jobs[:20]:  # Slack 블록 제한 고려하여 최대 20개
+    for job in new_jobs[:20]:
         text = f"*<{job['url']}|{job['title']}>*"
         if job["period"]:
             text += f"\n접수기간: {job['period']}"
@@ -172,11 +163,9 @@ def main():
         print("새로운 공고가 없습니다.")
         return
 
-    # Slack 전송
     message = build_slack_message(new_jobs)
     send_to_slack(message)
 
-    # seen 목록 업데이트
     for job in new_jobs:
         seen.append(job["id"])
     save_seen(seen)
