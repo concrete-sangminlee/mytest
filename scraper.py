@@ -127,16 +127,20 @@ def build_slack_message(new_jobs: list[dict]) -> dict:
 
 
 def send_to_slack(message: dict) -> None:
-    webhook_url = os.environ.get("SLACK_WEBHOOK_URL")
-    if not webhook_url:
+    webhook_urls = os.environ.get("SLACK_WEBHOOK_URL", "")
+    if not webhook_urls:
         print("SLACK_WEBHOOK_URL 환경변수가 설정되지 않았습니다.")
         print("Slack 전송을 건너뜁니다.")
         print(json.dumps(message, ensure_ascii=False, indent=2))
         return
 
-    resp = requests.post(webhook_url, json=message, timeout=10)
-    resp.raise_for_status()
-    print("Slack 전송 완료!")
+    for i, url in enumerate(webhook_urls.split(","), 1):
+        url = url.strip()
+        if not url:
+            continue
+        resp = requests.post(url, json=message, timeout=10)
+        resp.raise_for_status()
+        print(f"Slack 채널 {i} 전송 완료!")
 
 
 def main():
