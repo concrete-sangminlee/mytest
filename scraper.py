@@ -2,6 +2,7 @@ import json
 import os
 import re
 import sys
+from datetime import datetime, timezone, timedelta
 from html import unescape
 from pathlib import Path
 from urllib.parse import quote
@@ -90,40 +91,80 @@ def scrape_jobs() -> list[dict]:
 
 
 def build_slack_message(new_jobs: list[dict]) -> dict:
+    kst = timezone(timedelta(hours=9))
+    now = datetime.now(kst)
+    timestamp = now.strftime("%Y. %m. %d  %H:%M KST")
+    count = len(new_jobs)
+    display_jobs = new_jobs[:20]
+
     blocks = [
         {
-            "type": "header",
+            "type": "section",
             "text": {
-                "type": "plain_text",
-                "text": "🆕 하이브레인 신규 채용공고",
-                "emoji": True,
+                "type": "mrkdwn",
+                "text": "*📢  하이브레인 신규 채용공고*",
             },
         },
-        {"type": "divider"},
-    ]
-
-    for job in new_jobs[:20]:
-        text = f"*<{job['url']}|{job['title']}>*"
-        if job["period"]:
-            text += f"\n접수기간: {job['period']}"
-
-        blocks.append({
-            "type": "section",
-            "text": {"type": "mrkdwn", "text": text},
-        })
-
-    if len(new_jobs) > 20:
-        blocks.append({
+        {
             "type": "context",
             "elements": [
                 {
                     "type": "mrkdwn",
-                    "text": f"외 {len(new_jobs) - 20}건 더 있습니다. <{BASE_URL}/recruitment/recruits?listType=D3NEW|전체 보기>",
-                }
+                    "text": f"🏢 하이브레인  ｜  🔔 *{count}건*의 새로운 채용공고",
+                },
             ],
+        },
+        {"type": "divider"},
+    ]
+
+    for job in display_jobs:
+        title_line = f"> *<{job['url']}|{job['title']}>*"
+        if job["period"]:
+            title_line += f"\n> 📅 `{job['period']}`"
+
+        blocks.append({
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": title_line},
+            "accessory": {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "지원하기", "emoji": True},
+                "url": job["url"],
+                "style": "primary",
+            },
         })
 
-    return {"blocks": blocks}
+    blocks.append({"type": "divider"})
+
+    blocks.append({
+        "type": "actions",
+        "elements": [
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "📋 전체 채용공고 보기", "emoji": True},
+                "url": f"{BASE_URL}/recruitment/recruits?listType=D3NEW",
+            },
+        ],
+    })
+
+    footer_text = f"🤖 HiBrain Job Alert  ｜  {timestamp}"
+    if count > 20:
+        footer_text = f"외 *{count - 20}건* 추가  ｜  " + footer_text
+
+    blocks.append({
+        "type": "context",
+        "elements": [
+            {"type": "mrkdwn", "text": footer_text},
+        ],
+    })
+
+    return {
+        "attachments": [
+            {
+                "color": "#0054a6",
+                "blocks": blocks,
+            }
+        ]
+    }
 
 
 def send_to_slack(message: dict) -> None:
@@ -161,7 +202,8 @@ def main():
     if test_mode:
         sample = jobs[:3]
         message = build_slack_message(sample)
-        message["blocks"][0]["text"]["text"] = "🧪 [테스트] 하이브레인 채용공고 알림 테스트"
+        message["attachments"][0]["blocks"][0]["text"]["text"] = "*🧪  [테스트] 하이브레인 채용공고 알림*"
+        message["attachments"][0]["color"] = "#f2c744"
         send_to_slack(message)
         print(f"테스트 메시지 전송 완료 ({len(sample)}건)")
         return
